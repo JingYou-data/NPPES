@@ -27,6 +27,8 @@ When learning data engineering, I wanted to work with real, messy data instead o
 
 I built this project to practice the full ELT workflow: extracting raw CSV files, loading them to S3, transforming with dbt, and serving analytics-ready tables. Along the way I learned a lot about data cleaning, dimensional modeling, and modern data tools.
 
+Code quality enforced with Ruff (pycodestyle, isort, flake8-bugbear, security rules)
+
 **Questions This Data Answers:**
 - How many healthcare providers operate in each state?
 - What are the most common medical specialties by geography?
