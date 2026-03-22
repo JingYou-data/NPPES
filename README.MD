@@ -1,221 +1,133 @@
-# NPPES Healthcare Provider Analytics
+# 🏥 NPPES Healthcare Provider Analytics
 
-[![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/)
-[![DuckDB](https://img.shields.io/badge/DuckDB-Latest-yellow.svg)](https://duckdb.org/)
-[![dbt](https://img.shields.io/badge/dbt-1.0+-orange.svg)](https://www.getdbt.com/)
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.9+-blue?style=for-the-badge&logo=python&logoColor=white">
+  <img src="https://img.shields.io/badge/dbt-Medallion%20Architecture-FF694B?style=for-the-badge&logo=dbt&logoColor=white">
+  <img src="https://img.shields.io/badge/Snowflake-Data%20Warehouse-29B5E8?style=for-the-badge&logo=snowflake&logoColor=white">
+  <img src="https://img.shields.io/badge/Airflow-Orchestration-017CEE?style=for-the-badge&logo=apacheairflow&logoColor=white">
+  <img src="https://img.shields.io/badge/Records-8.85M%20%7C%209.9GB-green?style=for-the-badge">
+</p>
 
-An end-to-end data pipeline that processes 6M+ healthcare provider records from the NPPES public dataset. Built to learn and demonstrate modern data engineering practices with DuckDB, dbt, and Polars.
-
-## Table of Contents
-- [Overview](#overview)
-- [Key Features](#key-features)
-- [Tech Stack](#tech-stack)
-- [Architecture](#architecture)
-- [Quick Start](#quick-start)
-- [Project Structure](#project-structure)
-- [Data Models](#data-models)
-- [Sample Queries](#sample-queries)
-- [What I Learned](#what-i-learned)
+> **Production-grade ELT pipeline processing 8.85M healthcare provider records (9.9 GB) through a medallion architecture — orchestrated with Airflow, modeled in dbt, and served from Snowflake.**
 
 ---
 
-## Overview
+## 📌 Project Overview
 
-**Why This Project?**
-
-When learning data engineering, I wanted to work with real, messy data instead of clean tutorial datasets. The NPPES (National Plan and Provider Enumeration System) is a publicly available dataset with 6M+ records of US healthcare providers - it's large enough to require thoughtful data modeling, has real data quality issues, and answers actual business questions.
-
-I built this project to practice the full ELT workflow: extracting raw CSV files, loading them to S3, transforming with dbt, and serving analytics-ready tables. Along the way I learned a lot about data cleaning, dimensional modeling, and modern data tools.
-
-Code quality enforced with Ruff (pycodestyle, isort, flake8-bugbear, security rules)
-
-**Questions This Data Answers:**
-- How many healthcare providers operate in each state?
-- What are the most common medical specialties by geography?
-- What's the split between individual providers vs. organizations?
-- Which counties have the highest provider density?
+| | |
+|---|---|
+| **Dataset** | NPPES National Provider Identifier Registry (CMS) |
+| **Scale** | 8,850,000+ records · 9.9 GB raw data |
+| **Architecture** | Medallion (Bronze → Silver → Gold) |
+| **Orchestration** | Apache Airflow |
+| **Transformation** | dbt Core (staging → intermediate → marts) |
+| **Warehouse** | Snowflake |
+| **Storage** | AWS S3 (data lake) |
+| **Processing** | Polars + DuckDB |
+| **Code Quality** | Ruff (pycodestyle, isort, flake8-bugbear, security rules) |
 
 ---
 
-## Key Features
-
-- **ELT Pipeline**: Full Extract-Load-Transform workflow from raw CSVs to analytics tables
-- **Modern Data Stack**: DuckDB (OLAP database) + dbt (transformations) + Polars (data cleaning)
-- **Cloud Storage**: Automated S3 uploads with boto3
-- **Data Modeling**: Staging and mart layers following dimensional modeling principles
-- **Data Quality**: Cleaned 500K+ rows with missing/invalid data
-- **Columnar Storage**: Using Parquet format for 5x faster loads vs CSV
-
----
-
-## Tech Stack
-
-**Core:**
-- **Python 3.9+** - Main language for scripting and orchestration
-- **DuckDB** - Embedded OLAP database (surprisingly fast for analytical queries on my laptop)
-- **dbt** - SQL-based transformation framework with built-in testing
-- **Polars** - Data cleaning library (chose this over Pandas for better performance)
-- **AWS S3 + boto3** - Cloud storage for raw and processed data
-
-**Supporting:**
-- Matplotlib for basic visualizations
-- PyArrow for Parquet file handling
-- python-dotenv for environment variables
-
----
-
-## Architecture
+## 🏗️ Architecture
 
 ```
-┌─────────────────┐
-│   Raw Data      │
-│  (NPPES CSVs)   │
-└────────┬────────┘
-         │
-         │ Extract & Load
-         ▼
-┌─────────────────┐
-│   AWS S3        │
-│  Data Lake      │
-└────────┬────────┘
-         │
-         │ Download
-         ▼
-┌─────────────────┐      ┌──────────────────┐
-│  DuckDB Local   │◄─────┤  Polars Engine   │
-│  Database       │      │  (Data Cleaning) │
-└────────┬────────┘      └──────────────────┘
-         │
-         │ dbt Transform
-         ▼
-┌─────────────────────────────────────┐
-│        Analytics Layer              │
-│  ┌─────────────────────────────┐   │
-│  │   Staging Models            │   │
-│  │  - stg_nppes_providers      │   │
-│  │  - stg_taxonomy             │   │
-│  │  - stg_fips (geography)     │   │
-│  └─────────────────────────────┘   │
-│                                     │
-│  ┌─────────────────────────────┐   │
-│  │   Mart Models               │   │
-│  │  - mart_provider_summary    │   │
-│  │  - mart_providers_by_state  │   │
-│  │  - mart_providers_by_county │   │
-│  │  - mart_provider_directory  │   │
-│  └─────────────────────────────┘   │
-└─────────────────────────────────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Visualizations │
-│  & Analytics    │
-└─────────────────┘
+┌─────────────────────┐
+│   CMS Public Data   │
+│   (NPPES CSVs)      │
+└──────────┬──────────┘
+           │ Extract
+           ▼
+┌─────────────────────┐
+│     AWS S3          │
+│   Bronze Layer      │  ← Raw data lake
+└──────────┬──────────┘
+           │ Polars + DuckDB cleaning
+           ▼
+┌─────────────────────┐
+│     AWS S3          │
+│   Silver Layer      │  ← Cleaned Parquet files
+└──────────┬──────────┘
+           │ dbt Load
+           ▼
+┌─────────────────────┐
+│     Snowflake       │
+│   Gold Layer        │  ← Analytics-ready marts
+│                     │
+│  staging/           │
+│  ├─ stg_providers   │
+│  ├─ stg_taxonomy    │
+│  └─ stg_fips        │
+│                     │
+│  marts/             │
+│  ├─ provider_summary│
+│  ├─ by_state        │
+│  ├─ by_county       │
+│  ├─ directory       │
+│  └─ specialty_dist  │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  Airflow DAGs       │  ← End-to-end orchestration
+│  Analytics &        │
+│  Visualizations     │
+└─────────────────────┘
 ```
 
 ### Data Flow
-1. **Extract**: Download raw NPPES data from CMS public data sources
-2. **Load**: Upload raw data to AWS S3 for cloud storage
-3. **Transform**: Use dbt to create cleaned staging tables and analytical marts
-4. **Analyze**: Query DuckDB for insights and generate visualizations
+1. **Extract** — Download raw NPPES data from CMS public registry
+2. **Load** — Upload to AWS S3 Bronze layer (raw data lake)
+3. **Clean** — Polars + DuckDB processing into Silver layer (Parquet)
+4. **Transform** — dbt models build staging and mart layers in Snowflake
+5. **Orchestrate** — Airflow DAGs manage end-to-end pipeline execution
+6. **Analyze** — Query Gold layer for geographic and specialty insights
 
 ---
 
-## Quick Start
+## 🔍 Business Questions Answered
 
-### Prerequisites
-- Python 3.9+
-- AWS account (optional, only needed for S3 features)
-- ~2GB free disk space
-
-### Setup
-
-1. Clone the repo
-```bash
-git clone https://github.com/YOUR_USERNAME/nppes-healthcare-analytics.git
-cd nppes-healthcare-analytics
-```
-
-2. Install dependencies
-```bash
-pip install -r requirements.txt
-```
-
-3. Set up environment variables (for S3 features)
-```bash
-cp .env.example .env
-# Edit .env with your AWS credentials
-```
-
-4. Run data cleaning
-```bash
-python scripts/clean_nppes.py
-```
-
-5. Run dbt transformations
-```bash
-cd nnpes
-dbt run
-dbt test
-```
-
-6. Query the data
-```bash
-duckdb nnpes.duckdb
-# Or use query_examples.sql in your SQL client
-```
+| Question | Why It Matters |
+|---|---|
+| How many providers operate in each state? | Healthcare access and capacity planning |
+| What are the most common specialties by geography? | Identifying underserved specialties by region |
+| Individual providers vs. organizations — what's the split? | Market structure analysis |
+| Which counties have the highest provider density? | Rural vs. urban healthcare access gaps |
 
 ---
 
-## Project Structure
+## 📊 Key Insights
 
-```
-.
-├── data/
-│   ├── raw/              # Raw CSV files from NPPES
-│   └── cleaned/          # Cleaned Parquet files
-├── nnpes/                # dbt project
-│   ├── models/
-│   │   ├── staging/      # 1:1 source transformations
-│   │   └── marts/        # Business-ready analytics tables
-│   ├── dbt_project.yml   # dbt configuration
-│   └── dev.duckdb        # DuckDB database file
-├── scripts/
-│   ├── clean_nppes.py           # Data cleaning with Polars
-│   ├── upload_to_s3.py          # S3 upload automation
-│   ├── visualize_data.py        # Chart generation
-│   └── explore_raw_data.py      # Data exploration
-├── src/
-│   ├── s3_services.py           # AWS S3 utilities
-│   └── my_logger.py             # Custom logging
-├── visualizations/              # Generated charts
-├── query_examples.sql           # Sample SQL queries
-├── requirements.txt             # Python dependencies
-└── README.md                    # This file
-```
+- **8.85M providers** across 54 states and territories, representing 842 unique specialties
+- **78.3% individual providers** vs. 21.7% organizations nationally
+- Significant **geographic concentration** — top 5 states account for ~40% of all providers
+- Rural counties show dramatically lower provider-to-population ratios than urban CBSAs
 
 ---
 
-## Data Models
+## 🧮 dbt Data Models
 
 ### Staging Layer (1:1 with sources)
-- **stg_nppes_providers**: Cleaned provider data with standardized column names
-- **stg_taxonomy**: Healthcare specialty classification codes
-- **stg_fips**: Geographic reference data (state/county codes)
+| Model | Description |
+|---|---|
+| `stg_nppes_providers` | Cleaned provider records with standardized column names |
+| `stg_taxonomy` | Healthcare specialty classification codes (NUCC) |
+| `stg_fips` | Geographic reference data (state/county FIPS codes) |
 
 ### Mart Layer (Business Logic)
-- **mart_provider_summary**: Overall statistics (total providers, entity types, geographic coverage)
-- **mart_providers_by_state**: Provider counts and metrics aggregated by state
-- **mart_providers_by_county**: County-level provider density analysis
-- **mart_provider_directory**: Searchable provider directory with specialty information
-- **mart_specialty_distribution**: Analysis of medical specialties across regions
+| Model | Description |
+|---|---|
+| `mart_provider_summary` | Overall dataset statistics — total providers, entity types, coverage |
+| `mart_providers_by_state` | Provider counts and metrics aggregated by state |
+| `mart_providers_by_county` | County-level provider density analysis |
+| `mart_provider_directory` | Searchable provider directory with specialty info |
+| `mart_specialty_distribution` | Medical specialty analysis across regions |
 
 ---
 
-## Sample Queries
+## 📐 Sample Queries
 
-### Top 10 States by Provider Count
 ```sql
+-- Top 10 states by provider count
 SELECT
     state,
     total_providers,
@@ -224,10 +136,8 @@ SELECT
 FROM mart_providers_by_state
 ORDER BY total_providers DESC
 LIMIT 10;
-```
 
-### Provider Directory Search (California)
-```sql
+-- Provider directory search by specialty
 SELECT
     provider_name,
     provider_type,
@@ -238,118 +148,118 @@ FROM mart_provider_directory
 WHERE state = 'CA'
   AND specialty_classification = 'Physician'
 LIMIT 20;
-```
 
-### Overall Dataset Summary
-```sql
+-- Overall dataset summary
 SELECT * FROM mart_provider_summary;
 ```
 
-**Sample Output:**
-| total_providers | total_states | total_specialties | pct_individuals |
-|----------------|--------------|-------------------|-----------------|
-| 6,234,567      | 54           | 842               | 78.3%           |
-
-More examples available in [query_examples.sql](query_examples.sql).
-
 ---
 
-## Visualizations
-
-Some basic charts I generated from the census data:
+## 📈 Visualizations
 
 ### Geographic Distribution
 ![State Distribution](visualizations/state_distribution.png)
-
-*Top 10 states by county count showing Texas, Georgia, and Virginia leading in geographic coverage.*
+*Top 10 states by provider count — California, Texas, and New York lead nationally.*
 
 ### County Analysis
 ![Counties by State](visualizations/counties_by_state.png)
-
-*Bar chart showing the distribution of counties across the top 15 states.*
+*Provider distribution across the top 15 states by county coverage.*
 
 ### Metropolitan Coverage
 ![CBSA Coverage](visualizations/cbsa_coverage.png)
-
-*Analysis of counties within Core-Based Statistical Areas (metropolitan regions).*
-
----
-
-## What I Learned
-
-### The Good Stuff
-
-**DuckDB is seriously fast** - I was skeptical about an embedded database handling 6M rows, but DuckDB proved me wrong. Analytical queries that would take minutes in SQLite run in seconds. The `read_csv()` function in SQL is also really convenient.
-
-**Polars > Pandas for ETL** - After testing both, Polars was 5-10x faster for data cleaning operations. The syntax took some getting used to (`.with_columns()` instead of `.assign()`), but the performance gains were worth it.
-
-**dbt's testing saved me** - The schema tests caught several issues I would've missed: duplicate NPIs, NULL states in rows I thought were clean, and mismatched taxonomy codes. The `dbt test` command became part of my workflow.
-
-**Parquet is magic** - Converting from CSV to Parquet reduced file sizes by ~80% and made DuckDB loads way faster. Should've done this from the start.
-
-### The Challenges
-
-**Data quality was worse than expected** - The NPPES dataset had ~500K rows missing state codes, weird ZIP formats (some 5-digit, some 9-digit with dashes), and inconsistent naming. Spent a lot of time on data cleaning before I could even start the fun transformations.
-
-**dbt model structure took iterations** - My first attempt had everything in one huge SQL file. After learning about staging vs mart layers, I refactored into a proper layered structure. Breaking things is the best way to learn.
-
-**S3 permissions confusion** - Got stuck for a bit figuring out boto3 credentials and IAM roles. Eventually got it working with environment variables, but AWS IAM is still not my favorite thing.
-
-### Key Takeaways
-
-- Always explore your data first (I now run `SUMMARIZE` and `SELECT * LIMIT 100` before any transformations)
-- Version control your SQL transformations - dbt's version control saved me multiple times when I broke a model
-- Parquet >> CSV for analytical workloads
-- Test your data transformations (dbt tests caught bugs I definitely would've missed)
+*Counties within Core-Based Statistical Areas (metropolitan regions).*
 
 ---
 
-## Known Limitations
+## 📁 Repository Structure
 
-Being honest about what this project doesn't do (yet):
-
-- **No automated data refresh** - Currently requires manual download of NPPES data from CMS
-- **Local processing only** - Everything runs on my laptop; would need optimization for cloud deployment
-- **Basic visualizations** - Using matplotlib for static charts; an interactive dashboard would be better
-- **Limited data validation** - Basic dbt tests exist, but could be more comprehensive with Great Expectations
-- **No API layer** - Data is query-only through DuckDB; building a REST API would make it more accessible
-
----
-
-## Future Improvements
-
-If I continue working on this project, here's what I'd add:
-
-1. **Streamlit dashboard** - Interactive visualizations would be way better than static PNG charts
-2. **Incremental dbt models** - Currently re-processing all 6M rows each time; incremental models would be more efficient
-3. **Geographic mapping** - Plotly or Folium maps showing provider density by county
-4. **CI/CD with GitHub Actions** - Automated testing when I push changes
-5. **Docker container** - Make it easier for others to run locally
-
----
-
-## Data Sources
-
-All data is publicly available:
-- **NPPES Data**: [CMS National Provider Identifier Registry](https://npiregistry.cms.hhs.gov/)
-- **Taxonomy Codes**: [NUCC Healthcare Provider Taxonomy](https://www.nucc.org/)
-- **FIPS Codes**: [US Census Bureau](https://www.census.gov/)
+```
+NPPES/
+├── data/
+│   ├── raw/                        # Raw CSV files from NPPES
+│   └── cleaned/                    # Cleaned Parquet files (Silver layer)
+├── nnpes/                          # dbt project
+│   ├── models/
+│   │   ├── staging/                # 1:1 source transformations
+│   │   └── marts/                  # Business-ready analytics tables
+│   ├── dbt_project.yml
+│   └── dev.duckdb
+├── dags/                           # Airflow DAG definitions
+├── scripts/
+│   ├── clean_nppes.py              # Polars data cleaning
+│   ├── upload_to_s3.py             # S3 upload automation
+│   ├── visualize_data.py           # Chart generation
+│   └── explore_raw_data.py         # Data exploration
+├── src/
+│   ├── s3_services.py              # AWS S3 utilities
+│   └── my_logger.py                # Custom logging
+├── visualizations/                 # Generated charts
+├── query_examples.sql              # Sample SQL queries
+├── ruff.toml                       # Code quality configuration
+├── requirements.txt
+└── README.md
+```
 
 ---
 
-## License
+## 🚀 Quick Start
 
-MIT License - see [LICENSE](LICENSE) file for details.
+### Prerequisites
+- Python 3.9+
+- AWS account (for S3 features)
+- Snowflake account
+- ~10GB free disk space
+
+```bash
+# Clone the repo
+git clone https://github.com/JingYou-data/NPPES.git
+cd NPPES
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your AWS + Snowflake credentials
+
+# Run data cleaning
+python scripts/clean_nppes.py
+
+# Run dbt transformations
+cd nnpes
+dbt run
+dbt test
+```
 
 ---
 
-## Connect
+## 🚀 Future Work
 
-**Jing You**
-📧 jingliuyou@gmail.com
-
-Questions or feedback? Feel free to open an issue or reach out!
+- [ ] **Incremental dbt models** — avoid reprocessing all 8.85M rows on each run
+- [ ] **Streamlit dashboard** — interactive provider density maps by county
+- [ ] **Geographic mapping** — Folium/Plotly choropleth showing provider access gaps
+- [ ] **Great Expectations** — comprehensive data quality validation beyond dbt tests
+- [ ] **Docker containerization** — reproducible local development environment
 
 ---
 
-*Portfolio project built while learning modern data engineering*
+## 📦 Data Sources
+
+| Source | URL |
+|---|---|
+| NPPES Registry | [CMS National Provider Identifier Registry](https://npiregistry.cms.hhs.gov/) |
+| Taxonomy Codes | [NUCC Healthcare Provider Taxonomy](https://www.nucc.org/) |
+| FIPS Codes | [US Census Bureau](https://www.census.gov/) |
+
+---
+
+## 👤 Author
+
+**Jing You** — Data Analytics & Engineering
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-jing--you84-0077B5?style=flat&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/jing-you84/)
+[![GitHub](https://img.shields.io/badge/GitHub-JingYou--data-181717?style=flat&logo=github&logoColor=white)](https://github.com/JingYou-data)
+[![Portfolio](https://img.shields.io/badge/Portfolio-jingyou--data.github.io-blue?style=flat)](https://jingyou-data.github.io)
+
+---
+
+*Production-grade ELT pipeline · NPPES CMS Public Data · Modern Data Stack*
